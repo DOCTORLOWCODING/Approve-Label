@@ -1,0 +1,93 @@
+name: Deploy Approve Label
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+        timeout-minutes: 6
+        env:
+          npm_config_fetch_retries: 2
+          npm_config_fetch_timeout: 120000
+
+      - name: Run tests
+        run: npm test
+        timeout-minutes: 3
+
+      - name: Build
+        run: npm run build
+        timeout-minutes: 5
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Verify output
+        run: |
+          test -s dist/index.html
+          test -s dist/background.html
+          test -s dist/toast.html
+          test -s dist/manifest.json
+          test -s dist/approve-icon.svg
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const manifest = JSON.parse(fs.readFileSync('dist/manifest.json', 'utf8'));
+          const base = 'https://doctorlowcoding.github.io/Approve-Label/';
+          if (manifest.name !== 'Approve Label') throw new Error('Manifest name mismatch');
+          if (manifest.description || manifest.icon) throw new Error('Install-card description/icon must be absent');
+          if (manifest.action?.title !== 'Approve Label') throw new Error('Action title mismatch');
+          if (manifest.action?.icon !== `${base}approve-icon.svg`) throw new Error('Room action icon URL mismatch');
+          if (manifest.action?.popover !== `${base}index.html`) throw new Error('Popover URL mismatch');
+          if (manifest.background_url !== `${base}background.html`) throw new Error('Background URL mismatch');
+          const icon = fs.readFileSync('dist/approve-icon.svg', 'utf8');
+          if (!icon.includes('stroke="#FFFFFF"') || /<rect\b|<image\b/i.test(icon)) throw new Error('Icon is not the expected transparent white SVG');
+          NODE
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
