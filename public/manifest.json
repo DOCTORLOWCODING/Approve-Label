@@ -1,0 +1,13 @@
+{
+  "name": "Approve Label",
+  "version": "1.0.0",
+  "manifest_version": 1,
+  "background_url": "https://doctorlowcoding.github.io/Approve-Label/background.html",
+  "action": {
+    "title": "Approve Label",
+    "icon": "https://doctorlowcoding.github.io/Approve-Label/approve-icon.svg",
+    "popover": "https://doctorlowcoding.github.io/Approve-Label/index.html",
+    "width": 360,
+    "height": 480
+  }
+}
